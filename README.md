@@ -1,3 +1,8 @@
+### Train: 
+## python train.py datasets/horses/ results/horses/ --data_parallel --bsize 64 --steps_1 6000 --steps_2 2000 --steps_3 400000 --snaperiod_1 1000 --snaperiod_2 1000 --snaperiod_3 10000 --cn_input_size 64 --ld_input_size 32  --hole_min_w 16 --hole_max_w 32 --hole_min_h 16 --hole_max_h 32
+
+## python predict_all.py results/horses/phase_1/model_cn_step250 my_config.json datasets/horses/test/horse000098.png  my_test.png --img_size 64
+
 # GLCIC-PyTorch
 
 ## About this repository
