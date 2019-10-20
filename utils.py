@@ -4,7 +4,40 @@ import torchvision.transforms as transforms
 import numpy as np
 import cv2
 from poissonblending import blend
+import random
+from PIL import Image
+import PIL.ImageOps
 
+
+def mask_from_file(img_names, shape):
+    mask = torch.zeros(shape)
+    bsize, _, mask_h, mask_w = mask.shape
+    for i in range(bsize):
+        name = img_names[i]
+        temp_str = str(name).replace("train","masks")
+        temp_str = temp_str.replace("test","masks")
+        temp_index =len(temp_str) - 4
+        rand_mask = random.randint(0,2)
+        mask_filename = temp_str[:temp_index] + '_mask' + str(rand_mask) + temp_str[temp_index:]
+        #print(mask_filename)
+        mask_img = Image.open(mask_filename).convert('L')
+        mask_img_inverted = PIL.ImageOps.invert(mask_img)
+        mask_trans = transforms.ToTensor()
+        mask_transformed = mask_trans(mask_img)
+        mask[i,:,:,:] = mask_transformed
+    return mask
+
+def gray_to_binary(imgs):
+    imgs_binary = imgs.copy_(imgs)
+    my_index = 0                        
+    for row in imgs:
+        my_img = transforms.ToPILImage(mode='L')(row)
+        bw = my_img.point(lambda x: 0 if x<160 else 255, '1')  #binarization
+        trans1 = transforms.ToTensor()
+        my_tensor = trans1(bw)
+        imgs_binary[my_index,:,:,:] = my_tensor
+        my_index = my_index + 1
+    return imgs_binary
 
 def gen_input_mask(
     shape, hole_size,
@@ -115,12 +148,42 @@ def sample_random_batch(dataset, batch_size=32):
     """
     num_samples = len(dataset)
     batch = []
+    names = []
     for _ in range(min(batch_size, num_samples)):
         index = random.choice(range(0, num_samples))
-        x = torch.unsqueeze(dataset[index], dim=0)
+        x = torch.unsqueeze(dataset[index][0], dim=0)
         batch.append(x)
-    return torch.cat(batch, dim=0)
+        names.append(dataset[index][1])
+    return (torch.cat(batch, dim=0), names)
 
+
+def blend_images(x, output, mask):
+    x = x.clone().cpu()
+    #x = torch.cat((x,x,x), dim=1) # convert to 3-channel format
+    output = output.clone().cpu()
+    #output = torch.cat((output,output,output), dim=1) # convert to 3-channel format
+    mask = mask.clone().cpu()
+    #mask = torch.cat((mask,mask,mask), dim=1) # convert to 3-channel format
+    num_samples = x.shape[0]
+    ret = []
+
+    for i in range(num_samples):
+        srcimg = transforms.functional.to_pil_image(output[i])
+        msk = transforms.functional.to_pil_image(mask[i])
+
+        srcimg_pixels = srcimg.load()
+        for x in range(msk.size[0]):
+            for y in range(msk.size[1]):
+                pix_val = msk.getpixel((x,y))
+                if pix_val == 0:
+                    srcimg.putpixel((x,y),0)
+
+        out = transforms.functional.to_tensor(srcimg)
+        out = torch.unsqueeze(out, dim=0)
+        ret.append(out)
+        
+    ret = torch.cat(ret, dim=0)
+    return ret
 
 def poisson_blend(x, output, mask):
     """
@@ -135,19 +198,26 @@ def poisson_blend(x, output, mask):
                 An image tensor of shape (N, 3, H, W) inpainted
                 using poisson image editing method.
     """
+    
     x = x.clone().cpu()
+    x = torch.cat((x,x,x), dim=1) # convert to 3-channel format
     output = output.clone().cpu()
+    output = torch.cat((output,output,output), dim=1) # convert to 3-channel format
     mask = mask.clone().cpu()
     mask = torch.cat((mask,mask,mask), dim=1) # convert to 3-channel format
     num_samples = x.shape[0]
     ret = []
     for i in range(num_samples):
         dstimg = transforms.functional.to_pil_image(x[i])
+
         dstimg = np.array(dstimg)[:, :, [2, 1, 0]]
+
         srcimg = transforms.functional.to_pil_image(output[i])
-        srcimg = np.array(srcimg)[:, :, [2, 1, 0]]
         msk = transforms.functional.to_pil_image(mask[i])
+                
+        srcimg = np.array(srcimg)[:, :, [2, 1, 0]]
         msk = np.array(msk)[:, :, [2, 1, 0]]
+        
         # compute mask's center
         xs, ys = [], []
         for i in range(msk.shape[0]):
@@ -155,11 +225,35 @@ def poisson_blend(x, output, mask):
                 if msk[i,j,0] == 255:
                     ys.append(i)
                     xs.append(j)
+                
         xmin, xmax = min(xs), max(xs)
         ymin, ymax = min(ys), max(ys)
         center = ((xmax + xmin) // 2, (ymax + ymin) // 2)
         out = cv2.seamlessClone(srcimg, dstimg, msk, center, cv2.NORMAL_CLONE)
-        out = out[:, :, [2, 1, 0]]
+        #out = cv2.seamlessClone(srcimg, msk, msk, center, cv2.NORMAL_CLONE)
+        #out = cv2.seamlessClone(msk, srcimg, msk, center, cv2.NORMAL_CLONE)
+
+        """
+        #pil_img1 = Image.fromarray(srcimg[:,:,0], 'L')
+        #pil_img1.save('mod_src.png')
+                
+        #pil_img2 = Image.fromarray(dstimg)
+        #pil_img3 = Image.fromarray(out)
+        #pil_img4 = Image.fromarray(msk)
+        
+        #pil_img2.save('dst.png')
+        #pil_img3.save('out.png')
+        #pil_img4.save('msk.png')
+
+        #import sys
+        #sys.exit()
+        """
+
+
+        
+        #out = out[:, :]
+        #out = out[:, :, [2, 1, 0]]
+        out = out[:, :, 0]
         out = transforms.functional.to_tensor(out)
         out = torch.unsqueeze(out, dim=0)
         ret.append(out)

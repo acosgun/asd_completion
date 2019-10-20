@@ -8,7 +8,7 @@ class CompletionNetwork(nn.Module):
     def __init__(self):
         super(CompletionNetwork, self).__init__()
         # input_shape: (None, 4, img_h, img_w)
-        self.conv1 = nn.Conv2d(4, 64, kernel_size=5, stride=1, padding=2)
+        self.conv1 = nn.Conv2d(2, 64, kernel_size=5, stride=1, padding=2)
         self.bn1 = nn.BatchNorm2d(64)
         self.act1 = nn.ReLU()
         # input_shape: (None, 64, img_h, img_w)
@@ -72,7 +72,7 @@ class CompletionNetwork(nn.Module):
         self.bn16 = nn.BatchNorm2d(32)
         self.act16 = nn.ReLU()
         # input_shape: (None, 32, img_h, img_w)
-        self.conv17 = nn.Conv2d(32, 3, kernel_size=3, stride=1, padding=1)
+        self.conv17 = nn.Conv2d(32, 1, kernel_size=3, stride=1, padding=1)
         self.act17 = nn.Sigmoid()
         # output_shape: (None, 3, img_h. img_w)
 
@@ -126,7 +126,8 @@ class LocalDiscriminator(nn.Module):
         self.bn5 = nn.BatchNorm2d(512)
         self.act5 = nn.ReLU()
         # input_shape: (None, 512, img_h//32, img_w//32)
-        in_features = 512 * (self.img_h//32) * (self.img_w//32)
+
+        in_features = 512 * (max(self.img_h//32,1)) * (max(self.img_w//32,1))
         self.flatten6 = Flatten()
         # input_shape: (None, 512 * img_h//32 * img_w//32)
         self.linear6 = nn.Linear(in_features, 1024)
@@ -175,7 +176,7 @@ class GlobalDiscriminator(nn.Module):
         self.act5 = nn.ReLU()
         # input_shape: (None, 512, img_h//32, img_w//32)
         if arc == 'celeba':
-            in_features = 512 * (self.img_h//32) * (self.img_w//32)
+            in_features = 512 * (max(1,self.img_h//32)) * (max(1,self.img_w//32))
             self.flatten6 = Flatten()
             self.linear6 = nn.Linear(in_features, 1024)
             self.act6 = nn.ReLU()
@@ -184,7 +185,7 @@ class GlobalDiscriminator(nn.Module):
             self.bn6 = nn.BatchNorm2d(512)
             self.act6 = nn.ReLU()
             # input_shape (None, 512, img_h//64, img_w//64)
-            in_features = 512 * (self.img_h//64) * (self.img_w//64)
+            in_features = 512 * (max(1,self.img_h//64)) * (max(1,self.img_w//64))
             self.flatten7 = Flatten()
             self.linear7 = nn.Linear(in_features, 1024)
             self.act7 = nn.ReLU()

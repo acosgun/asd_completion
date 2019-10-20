@@ -13,16 +13,18 @@ class ImageDataset(data.Dataset):
         self.data_dir = os.path.expanduser(data_dir)
         self.transform = transform
         self.imgpaths = self.__load_imgpaths_from_dir(self.data_dir, walk=recursive_search)
-
+        
     def __len__(self):
         return len(self.imgpaths)
 
-    def __getitem__(self, index, color_format='RGB'):
+    def __getitem__(self, index, color_format='L'):
         img = Image.open(self.imgpaths[index])
         img = img.convert(color_format)
         if self.transform is not None:
             img = self.transform(img)
-        return img
+
+        tuple_with_path = (img, self.imgpaths[index])
+        return tuple_with_path
 
     def __is_imgfile(self, filepath):
         filepath = os.path.expanduser(filepath)
